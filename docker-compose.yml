@@ -1,0 +1,9 @@
+services:
+  web:
+    image: ${DOCKER_IMAGE_TAG}
+    container_name: gentsity-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
