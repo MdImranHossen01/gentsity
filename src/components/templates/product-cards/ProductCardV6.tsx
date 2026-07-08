@@ -3,24 +3,16 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShoppingCart, Heart, Search } from 'lucide-react';
+import { ShoppingCart, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { addToCart, clearCart } from '@/store/slices/cartSlice';
 import { toggleWishlist } from '@/store/slices/wishlistSlice';
 import { toast } from 'sonner';
 import { useSession } from 'next-auth/react';
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { QuickViewModal } from './QuickViewModal';
 import { fbEvent } from '@/lib/fpixel';
 import { ttEvent } from '@/lib/tiktok';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 interface ProductCardProps {
   product: {
@@ -51,12 +43,12 @@ export default function ProductCardV6({ product, isFlashSale, priority }: Produc
   const isInWishlist = wishlist.includes(product._id);
   const hasVariants = product.variants && product.variants.length > 0;
 
-  const [showQuickViewModal, setShowQuickViewModal] = useState(false);
+
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     if (hasVariants) {
-      setShowQuickViewModal(true);
+      router.push(`/product/${product.slug}`);
     } else {
       dispatch(addToCart({
         productId: product._id,
@@ -92,7 +84,7 @@ export default function ProductCardV6({ product, isFlashSale, priority }: Produc
   const handleBuyNow = (e: React.MouseEvent) => {
     e.preventDefault();
     if (hasVariants) {
-      setShowQuickViewModal(true);
+      router.push(`/product/${product.slug}`);
       return;
     }
 
@@ -160,29 +152,7 @@ export default function ProductCardV6({ product, isFlashSale, priority }: Produc
 
 
 
-        {/* Hover Actions - Centered circles */}
-        <div className="absolute inset-0 hidden md:flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-black/5 backdrop-blur-[2px]">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="secondary"
-                  className="h-12 w-12 rounded-full bg-white text-black hover:bg-primary hover:text-white shadow-xl transition-all hover:scale-110"
-                  onClick={(e) => { e.preventDefault(); setShowQuickViewModal(true); }}
-                  aria-label="Quick view product"
-                >
-                  <Search className="h-5 w-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Quick View</p>
-              </TooltipContent>
-            </Tooltip>
 
-
-          </TooltipProvider>
-        </div>
       </div>
 
       {/* Product Info */}
@@ -220,11 +190,7 @@ export default function ProductCardV6({ product, isFlashSale, priority }: Produc
         </div>
       </div>
 
-      <QuickViewModal
-        product={product}
-        isOpen={showQuickViewModal}
-        onClose={() => setShowQuickViewModal(false)}
-      />
+
     </div>
   );
 }

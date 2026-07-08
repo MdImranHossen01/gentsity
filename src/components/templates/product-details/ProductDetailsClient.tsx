@@ -4,7 +4,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   ShoppingCart,
-  Heart,
   Minus,
   Plus,
   Star,
@@ -701,16 +700,6 @@ export default function ProductDetailsClient({ product }: ProductDetailsClientPr
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
-
-            <Button
-              size="icon"
-              variant="outline"
-              className="h-12 w-12 rounded-full transition-all hover:scale-110 active:scale-95 flex-shrink-0"
-              onClick={handleFavorite}
-              aria-label={isInWishlist ? "Remove from wishlist" : "Add to wishlist"}
-            >
-              <Heart className={`h-5 w-5 transition-colors ${isInWishlist ? 'fill-destructive text-destructive' : 'text-muted-foreground'}`} />
-            </Button>
           </div>
 
           {/* Row 2: Buy Now (Order Now) */}
