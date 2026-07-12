@@ -37,6 +37,24 @@ export default function OrderDetailsDialog({
   const [loading, setLoading] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   
+  const [fraudData, setFraudData] = useState<any>(null);
+  const [fraudLoading, setFraudLoading] = useState(false);
+
+  const fetchFraudData = async (phone: string) => {
+    setFraudLoading(true);
+    try {
+      const res = await fetch(`/api/admin/courier/fraud-check?phone=${phone}`);
+      if (res.ok) {
+        const json = await res.json();
+        setFraudData(json);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFraudLoading(false);
+    }
+  };
+
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<any>(null);
 
@@ -85,6 +103,9 @@ export default function OrderDetailsDialog({
         ]);
         
         setOrder(orderData);
+        if (orderData?.shippingAddress?.phone) {
+          fetchFraudData(orderData.shippingAddress.phone);
+        }
         setSettings(settingsData);
         setEditForm({
           shippingAddress: {
@@ -113,7 +134,8 @@ export default function OrderDetailsDialog({
             image: item.image || '',
             purchasePrice: item.purchasePrice || 0
           })) : [],
-          status: orderData.status || 'Order Placed'
+          status: orderData.status || 'Order Placed',
+          internalNote: orderData.internalNote || ''
         });
       } catch (error: any) {
         if (error.name !== 'AbortError') {
@@ -134,6 +156,8 @@ export default function OrderDetailsDialog({
       setSettings(null);
       setIsEditing(false);
       setEditForm(null);
+      setFraudData(null);
+      setFraudLoading(false);
       // Reset shipping fields when closing or switching orders
       setCityId('');
       setZoneId('');
@@ -230,7 +254,8 @@ export default function OrderDetailsDialog({
               image: item.image || '',
               purchasePrice: item.purchasePrice || 0
             })) : [],
-            status: updatedData.status || 'Order Placed'
+            status: updatedData.status || 'Order Placed',
+            internalNote: updatedData.internalNote || ''
           });
         }
       } else {
@@ -622,6 +647,19 @@ export default function OrderDetailsDialog({
 
                 <Separator />
 
+                {/* Internal Note */}
+                <div className="space-y-2">
+                  <h3 className="text-sm font-bold uppercase text-muted-foreground">Internal Note (Admin/Manager)</h3>
+                  <textarea 
+                    value={editForm.internalNote || ''} 
+                    onChange={(e) => setEditForm({ ...editForm, internalNote: e.target.value })}
+                    className="w-full text-sm p-2 border rounded h-20 resize-y" 
+                    placeholder="Enter customer specific internal notes here..."
+                  />
+                </div>
+
+                <Separator />
+
                 {/* Form Footer Actions */}
                 <div className="flex gap-3 pt-4 justify-end">
                   <Button 
@@ -718,9 +756,11 @@ export default function OrderDetailsDialog({
                     );
                   })()}
                   {order.shippingAddress?.phone && (
-                    <p className="flex items-center gap-1 mt-1 text-muted-foreground">
-                      <Phone className="h-3 w-3" /> {order.shippingAddress.phone}
-                    </p>
+                    <div className="space-y-2 mt-1">
+                      <p className="flex items-center gap-1 text-muted-foreground font-semibold">
+                        <Phone className="h-3 w-3" /> {order.shippingAddress.phone}
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -768,6 +808,70 @@ export default function OrderDetailsDialog({
                 </div>
               </div>
             </div>
+
+            {/* BD Courier Fraud Checker UI */}
+            {order.shippingAddress?.phone && (
+              <div className="mt-2 p-3 bg-muted/30 border rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-muted-foreground tracking-wider">BD Courier Profile</span>
+                  {fraudLoading && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                </div>
+
+                {fraudData?.status === 'success' && fraudData?.data?.summary ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground text-[10px]">Success Rate:</span>
+                        <span className={`font-black ${fraudData.data.summary.success_ratio >= 80 ? 'text-green-600' : fraudData.data.summary.success_ratio >= 60 ? 'text-yellow-600' : 'text-red-600'}`}>
+                          {fraudData.data.summary.success_ratio}%
+                        </span>
+                      </div>
+                      <span className="text-muted-foreground/35">|</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground text-[10px]">Total Parcels:</span>
+                        <span className="font-bold text-slate-800 dark:text-zinc-200">{fraudData.data.summary.total_parcel}</span>
+                      </div>
+                      <span className="text-muted-foreground/35">|</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground text-[10px]">Delivered:</span>
+                        <span className="font-bold text-green-600">{fraudData.data.summary.success_parcel}</span>
+                      </div>
+                      <span className="text-muted-foreground/35">|</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground text-[10px]">Cancelled:</span>
+                        <span className="font-bold text-red-600">{fraudData.data.summary.cancelled_parcel}</span>
+                      </div>
+                    </div>
+
+                    {/* Reports List */}
+                    {fraudData.reports && fraudData.reports.length > 0 && (
+                      <div className="border-t pt-2 mt-1">
+                        <span className="text-[10px] font-bold text-red-600 block mb-1">⚠️ Merchant Fraud Reports ({fraudData.reports.length})</span>
+                        <div className="space-y-1.5 max-h-[80px] overflow-y-auto">
+                          {fraudData.reports.map((report: any, idx: number) => (
+                            <div key={idx} className="bg-red-50 dark:bg-red-950/20 p-1.5 rounded text-[10px] border border-red-100 dark:border-red-900/50">
+                              <p className="font-semibold text-red-700 dark:text-red-400">{report.name || 'Anonymous'}: <span className="font-normal text-slate-700 dark:text-zinc-300">{report.details}</span></p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : !fraudLoading && (
+                  <div className="flex justify-between items-center text-[10px]">
+                    <span className="text-muted-foreground">Click to fetch courier history</span>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      className="h-6 px-2 text-[10px]" 
+                      onClick={() => fetchFraudData(order.shippingAddress.phone)}
+                    >
+                      Verify Number
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <Separator />
 
@@ -908,6 +1012,17 @@ export default function OrderDetailsDialog({
                 </div>
               )}
             </div>
+
+            {/* Internal Note */}
+            {order.internalNote && (
+              <>
+                <Separator />
+                <div className="space-y-2 bg-yellow-50 dark:bg-yellow-950/20 p-3 rounded-lg border border-yellow-200/50">
+                  <h4 className="text-xs font-bold uppercase text-amber-800 dark:text-amber-300">Internal Note (Admin/Manager)</h4>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{order.internalNote}</p>
+                </div>
+              </>
+            )}
 
             <Separator />
             

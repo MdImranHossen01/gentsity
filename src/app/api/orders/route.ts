@@ -85,6 +85,30 @@ export async function POST(req: NextRequest) {
     const { items, shippingAddress, paymentMethod, useWallet, couponCode, manualPaymentDetails } = validation.data;
     const clientProvidedDeliveryCharge = validation.data.deliveryCharge;
 
+    await connectToDatabase();
+
+    // Check for pending/unconfirmed orders ('Order Placed')
+    const queryConditions: any[] = [];
+    if (sessionUser?.user?.id) {
+      queryConditions.push({ user: sessionUser.user.id });
+    }
+    if (shippingAddress.phone) {
+      queryConditions.push({ 'shippingAddress.phone': shippingAddress.phone });
+    }
+
+    if (queryConditions.length > 0) {
+      const existingPendingOrder = await Order.findOne({
+        $or: queryConditions,
+        status: 'Order Placed'
+      });
+
+      if (existingPendingOrder) {
+        return NextResponse.json({
+          message: 'You already have a pending order. Please wait for it to be confirmed before placing another order.'
+        }, { status: 400 });
+      }
+    }
+
     const conn = await connectToDatabase();
 
     // Fetch Settings
@@ -573,9 +597,45 @@ export async function GET(req: NextRequest) {
 
     const orders = await ordersQuery.populate('user', 'name email');
 
+    let processedOrders = orders;
+    if (fetchAll && isAdmin) {
+      processedOrders = await Promise.all(orders.map(async (order: any) => {
+        const phone = order.shippingAddress?.phone;
+        if (!phone) return { ...order.toObject(), isRepeat: false, isDuplicate: false };
+
+        const otherOrders = await Order.find({
+          "shippingAddress.phone": phone,
+          _id: { $ne: order._id },
+          deletedAt: null
+        }).select('items');
+
+        if (otherOrders.length === 0) {
+          return { ...order.toObject(), isRepeat: false, isDuplicate: false };
+        }
+
+        const isDuplicate = otherOrders.some(other => {
+          if (other.items.length !== order.items.length) return false;
+          return order.items.every((item: any) => {
+            return other.items.some((otherItem: any) => {
+              return String(otherItem.product) === String(item.product) &&
+                     String(otherItem.color || '') === String(item.color || '') &&
+                     String(otherItem.size || '') === String(item.size || '') &&
+                     otherItem.quantity === item.quantity;
+            });
+          });
+        });
+
+        return {
+          ...order.toObject(),
+          isRepeat: true,
+          isDuplicate
+        };
+      })) as any[];
+    }
+
     if (fetchAll && isAdmin) {
       return NextResponse.json({
-        orders,
+        orders: processedOrders,
         totalCount,
         page,
         totalPages: Math.ceil(totalCount / limit)
