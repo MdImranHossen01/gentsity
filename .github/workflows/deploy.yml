@@ -60,6 +60,11 @@ jobs:
                   - "3000:3000"
                 env_file:
                   - .env.local
+                logging:
+                  driver: "json-file"
+                  options:
+                    max-size: "10m"
+                    max-file: "3"
             EOF
 
             echo "${{ secrets.DOCKER_HUB_TOKEN }}" | docker login -u "${{ secrets.DOCKER_HUB_USERNAME }}" --password-stdin
