@@ -134,6 +134,7 @@ function OrdersContent() {
   const [orders, setOrders] = useState<any[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [statusCounts, setStatusCounts] = useState<{ [key: string]: number }>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchParams.get('search') || '');
@@ -154,6 +155,7 @@ function OrdersContent() {
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1);
     }, 500);
     return () => clearTimeout(handler);
   }, [searchTerm]);
@@ -183,11 +185,6 @@ function OrdersContent() {
       router.push(`/admin/orders?${newQuery}`);
     }
   }, [currentPage, statusFilter, debouncedSearchTerm, dateFilter.from, dateFilter.to]);
-
-  // Reset page to 1 when search or status filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearchTerm, statusFilter, dateFilter.from, dateFilter.to]);
 
   const handleDownloadInvoice = async (order: any) => {
     try {
@@ -224,7 +221,7 @@ function OrdersContent() {
       const queryParams = new URLSearchParams({
         all: 'true',
         page: pageVal.toString(),
-        limit: '20',
+        limit: '50',
         search: debouncedSearchTerm,
         status: statusFilter,
         from: dateFilter.from,
@@ -238,6 +235,7 @@ function OrdersContent() {
       setOrders(data.orders || []);
       setTotalPages(data.totalPages || 1);
       setTotalCount(data.totalCount || 0);
+      setStatusCounts(data.statusCounts || {});
 
       // Also fetch settings for the invoice generator
       const settingsRes = await fetch('/api/settings');
@@ -621,16 +619,19 @@ function OrdersContent() {
                 ].map((status) => (
                   <DropdownMenuItem
                     key={status}
-                    onClick={() => setStatusFilter(status)}
+                    onClick={() => {
+                      setStatusFilter(status);
+                      setCurrentPage(1);
+                    }}
                     className={statusFilter === status ? "bg-accent font-bold" : ""}
                   >
                     <div className="flex items-center justify-between w-full">
-                      <span>{status}</span>
-                      {status === 'All' && (
-                        <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">
-                          {totalCount}
-                        </Badge>
-                      )}
+                      <span>{status === 'Order Placed' ? 'Placed' : 
+                            status === 'Ready for Delivery' ? 'Ready' :
+                            status === 'Released for Delivery' ? 'Released' : status}</span>
+                      <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">
+                        {statusCounts[status] || 0}
+                      </Badge>
                     </div>
                   </DropdownMenuItem>
                 ))}
@@ -644,14 +645,20 @@ function OrdersContent() {
             type="date"
             className="h-8 w-full md:w-36 border-none bg-transparent focus-visible:ring-0"
             value={dateFilter.from}
-            onChange={(e) => setDateFilter(prev => ({ ...prev, from: e.target.value }))}
+            onChange={(e) => {
+              setDateFilter(prev => ({ ...prev, from: e.target.value }));
+              setCurrentPage(1);
+            }}
           />
           <span className="text-muted-foreground text-xs">to</span>
           <Input
             type="date"
             className="h-8 w-full md:w-36 border-none bg-transparent focus-visible:ring-0"
             value={dateFilter.to}
-            onChange={(e) => setDateFilter(prev => ({ ...prev, to: e.target.value }))}
+            onChange={(e) => {
+              setDateFilter(prev => ({ ...prev, to: e.target.value }));
+              setCurrentPage(1);
+            }}
           />
         </div>
 
@@ -663,6 +670,7 @@ function OrdersContent() {
               setStatusFilter('All');
               setDateFilter({ from: '', to: '' });
               setSearchTerm('');
+              setCurrentPage(1);
             }}
             className="text-xs text-muted-foreground hover:text-primary shrink-0"
           >
@@ -684,18 +692,29 @@ function OrdersContent() {
           { label: 'Cancelled', value: 'Cancelled' }
         ].map((status) => {
           const isActive = statusFilter === status.value;
+          const count = statusCounts[status.value] || 0;
           return (
             <button
               key={status.value}
-              onClick={() => setStatusFilter(status.value)}
-              className={`w-full py-2 text-xs font-semibold rounded-md transition-all duration-200 text-center truncate ${
+              onClick={() => {
+                setStatusFilter(status.value);
+                setCurrentPage(1);
+              }}
+              className={`w-full py-2 text-xs font-semibold rounded-md transition-all duration-200 text-center flex items-center justify-center gap-1.5 border border-input ${
                 isActive
                   ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'bg-background hover:bg-muted text-muted-foreground border border-input'
+                  : 'bg-background hover:bg-muted text-muted-foreground'
               }`}
               title={status.label}
             >
-              {status.label}
+              <span>{status.label}</span>
+              <span className={`px-1.5 py-0.5 text-[10px] rounded-full ${
+                isActive 
+                  ? 'bg-primary-foreground/20 text-primary-foreground font-bold' 
+                  : 'bg-muted-foreground/15 text-muted-foreground font-bold'
+              }`}>
+                {count}
+              </span>
             </button>
           );
         })}
@@ -781,7 +800,7 @@ function OrdersContent() {
             <TableRow>
               <TableHead className="w-12">
                 <Checkbox
-                  checked={selectedIds.length === filteredOrders.length && filteredOrders.length > 0}
+                  checked={filteredOrders.length > 0 && filteredOrders.every(order => selectedIds.includes(order._id))}
                   onCheckedChange={toggleSelectAll}
                 />
               </TableHead>

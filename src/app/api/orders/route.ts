@@ -541,10 +541,9 @@ export async function GET(req: NextRequest) {
     await connectToDatabase();
 
     let query: any = { deletedAt: null };
+    let statusCountsMap: any = {};
+
     if (fetchAll && isAdmin) {
-      if (status && status !== 'All') {
-        query.status = status;
-      }
       if (fromDate || toDate) {
         query.createdAt = {};
         if (fromDate) query.createdAt.$gte = new Date(fromDate);
@@ -579,6 +578,37 @@ export async function GET(req: NextRequest) {
 
         query.$and = query.$and || [];
         query.$and.push({ $or: searchConditions });
+      }
+
+      // Calculate counts for each status using aggregation on the query WITHOUT status filter
+      const aggregationResult = await Order.aggregate([
+        { $match: query },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]);
+
+      const counts: any = {
+        All: 0,
+        'Order Placed': 0,
+        'Confirmed': 0,
+        'Paid': 0,
+        'Ready for Delivery': 0,
+        'Released for Delivery': 0,
+        'Delivered': 0,
+        'Cancelled': 0
+      };
+
+      let totalAll = 0;
+      aggregationResult.forEach((item: any) => {
+        if (item._id) {
+          counts[item._id] = item.count;
+          totalAll += item.count;
+        }
+      });
+      counts.All = totalAll;
+      statusCountsMap = counts;
+
+      if (status && status !== 'All') {
+        query.status = status;
       }
     } else {
       const userId = (session.user as any).id;
@@ -639,7 +669,8 @@ export async function GET(req: NextRequest) {
         orders: processedOrders,
         totalCount,
         page,
-        totalPages: Math.ceil(totalCount / limit)
+        totalPages: Math.ceil(totalCount / limit),
+        statusCounts: statusCountsMap
       });
     }
 
