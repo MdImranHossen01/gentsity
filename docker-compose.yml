@@ -1,6 +1,6 @@
 services:
   web:
-    image: ${DOCKER_IMAGE_TAG}
+    image: imranshuvo101/gentsity-app:latest
     container_name: gentsity-app
     restart: unless-stopped
     ports:
